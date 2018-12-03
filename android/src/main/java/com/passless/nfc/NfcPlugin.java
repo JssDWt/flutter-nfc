@@ -254,7 +254,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
         String.format(
           "onMethodCall: received call to '%s', but is not implemented",
           call.method));
-        result.notImplemeted();
+        result.notImplemented();
         break;
     }
   }
