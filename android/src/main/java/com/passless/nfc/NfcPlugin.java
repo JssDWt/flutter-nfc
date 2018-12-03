@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.Log;
 
+import io.flutter.plugin.common.JSONMethodCodec;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
@@ -76,8 +77,10 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
    * @param registrar @link{Registrar} that registers the plugin.
    */
   public static void registerWith(Registrar registrar) {
-    final MethodChannel methodChannel = 
-      new MethodChannel(registrar.messenger(), "plugins.passless.com/nfc");
+    final MethodChannel methodChannel = new MethodChannel(
+      registrar.messenger(), 
+      "plugins.passless.com/nfc", 
+      JSONMethodCodec.INSTANCE);
     final NfcPlugin plugin = new NfcPlugin(methodChannel, registrar);
 
     // Make sure the plugin listens to new intents on foreground dispatch.
@@ -372,7 +375,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
 
     // TODO: Be able to handle multiple payloads.
     String payload = payloads[0];
-
+    
     // Call the Dart side.
     methodChannel.invokeMethod("onMessage", payload, new Result(){
       /**

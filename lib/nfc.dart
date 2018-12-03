@@ -15,7 +15,7 @@ class Nfc {
   
   /// Singleton instance of the Nfc plugin class.
   static final Nfc _instance = Nfc.private(
-    const MethodChannel('plugins.passless.com/nfc'));
+    const MethodChannel('plugins.passless.com/nfc', JSONMethodCodec()));
 
   /// The channel used to pass/receive messages to native platforms.
   final MethodChannel _channel;
