@@ -10,12 +10,16 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  // Initialize the nfc plugin high in the widget tree.
   final Nfc _nfc = Nfc();
   String currentMessage = "No message yet...";
 
   @override
   void initState() {
     super.initState();
+
+    // configure the plugin early. No messages are received before the plugin is
+    // configured.
     _nfc.configure(
       onMessage: (String message) async {
         print("onMessage: $message");
@@ -26,8 +30,8 @@ class _MyAppState extends State<MyApp> {
 
   void _showMessage(String message) {
     setState(() {
-          currentMessage = message;
-        });
+      currentMessage = message;
+    });
   }
 
   @override

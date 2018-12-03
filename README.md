@@ -6,6 +6,7 @@ The package is currently not yet on publang.
 
 ## Supported features
 - Receiving Ndef message with a single record. The record will be interpreted as UTF-8 string.
+- Currently only for Android. iOS will follow.
 
 ## Installation
 Clone the github repo next to your flutter project.
