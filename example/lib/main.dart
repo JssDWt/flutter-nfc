@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:nfc/nfc.dart';
 
@@ -12,7 +14,9 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   // Initialize the nfc plugin high in the widget tree.
   final Nfc _nfc = Nfc();
-  String currentMessage = "No message yet...";
+  String _currentMessage = "No message yet...";
+  StreamSubscription<bool> _nfcStateChangeSubscription;
+  bool _isConfigured = false;
 
   @override
   void initState() {
@@ -25,12 +29,27 @@ class _MyAppState extends State<MyApp> {
         print("onMessage: $message");
         _showMessage(message);
       }
-    );
+    ).then((r) {
+      setState(() => _isConfigured = true);
+    } );
+
+    // After calling configure, the current nfc state values can be fetched.
+    // bool nfcEnabled = _nfc.nfcEnabled;
+
+    // Listen to nfc state changes (nfc adapter is turned on/off)
+    _nfcStateChangeSubscription = _nfc.nfcStateChange.listen((nowEnabled) {
+      setState(() {});
+    });
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+    _nfcStateChangeSubscription.cancel();
+  }
   void _showMessage(String message) {
     setState(() {
-      currentMessage = message;
+      _currentMessage = message;
     });
   }
 
@@ -42,7 +61,19 @@ class _MyAppState extends State<MyApp> {
           title: const Text('Nfc example app'),
         ),
         body: Center(
-          child: Text(currentMessage),
+          child: !_isConfigured ? CircularProgressIndicator() : Column(
+            children: <Widget>[
+              Text("Nfc ${_nfc.nfcAvailable ? "is" : "is NOT"} available on this device."),
+              Text("Nfc is turned ${_nfc.nfcEnabled ? "on" : "off"}."),
+              Text("Last nfc message: '$_currentMessage'"),
+              RaisedButton(
+                child: Text("NFC settings"),
+                onPressed: () {
+                  _nfc.gotoNfcSettings();
+                },
+              )
+            ],
+          ),
         ),
       ),
     );

@@ -4,13 +4,17 @@ import android.app.Activity;
 import android.app.Application;
 import android.app.Application.ActivityLifecycleCallbacks;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.Settings;
 import android.util.Log;
 
 import io.flutter.plugin.common.JSONMethodCodec;
@@ -22,6 +26,7 @@ import io.flutter.plugin.common.PluginRegistry.Registrar;
 import io.flutter.plugin.common.PluginRegistry.NewIntentListener;
 
 import java.nio.charset.Charset;
+import java.util.HashMap;
 
 /** 
  * NfcPlugin --- Flutter plugin for handling nfc messages. 
@@ -29,10 +34,6 @@ import java.nio.charset.Charset;
 */
 public class NfcPlugin implements MethodCallHandler, NewIntentListener, 
   ActivityLifecycleCallbacks {
-  /** Name of saved version of @link{#intentHandled}. */
-  static final String STATE_INTENT_HANDLED = 
-    "com.passless.nfc.state.intent_handled";
-
   /** Name of the logger for this class. */
   static final String LOGNAME = NfcPlugin.class.getSimpleName();
   
@@ -50,15 +51,31 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
 
   /** Filters used to receive nfc messages on foreground dispatch. */
   private IntentFilter[] nfcFilters;
-
+  
   /** 
-   * Value indicating whether the current intent has been handled.
+   * Value indicating whether the nfc feature is available on the device. 
+   * Defaults to true.
+   * */
+  private boolean nfcAvailable = true;
+
+  /** Value indicating whether the @link{NfcAdapter} is currently enabled. */
+  private boolean nfcEnabled;
+
+  /** Listens to nfc adapter state changes (off/on) */
+  private BroadcastReceiver nfcStateChangeListener;
+  
+  /** IntentFilter for detecting nfc adapter state changes. */
+  private IntentFilter nfcStateChangeIntentFilter
+    = new IntentFilter(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED);
+    
+  /** 
+   * Value indicating whether the current intent should been handled.
    * <p>
    * This value is used to be able to pass foreground dispatch intents to
    * the onResume method.
    * </p>
    */
-  private boolean intentHandled = false;
+  private boolean shouldHandleIntent = true;
 
   // TODO: Consider saving this on saveinstancestate.
   /** 
@@ -77,11 +94,13 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
    * @param registrar @link{Registrar} that registers the plugin.
    */
   public static void registerWith(Registrar registrar) {
+    Log.w(LOGNAME, "registerWith called.");
     final MethodChannel methodChannel = new MethodChannel(
       registrar.messenger(), 
       "plugins.passless.com/nfc", 
       JSONMethodCodec.INSTANCE);
     final NfcPlugin plugin = new NfcPlugin(methodChannel, registrar);
+    plugin.initialize();
 
     // Make sure the plugin listens to new intents on foreground dispatch.
     registrar.addNewIntentListener(plugin);
@@ -110,19 +129,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
    * @param savedInstanceState Optional saved state for the activity.
    */
   @Override
-  public void onActivityCreated(
-    Activity activity, 
-    Bundle savedInstanceState) {
-      // Only do work when the 'right' activity is created.
-      if (activity == registrar.activity()) {
-        if(savedInstanceState != null) {
-          this.intentHandled = 
-            savedInstanceState.getBoolean(STATE_INTENT_HANDLED);
-        }
-    
-        setNfcSettings();
-      }    
-  }
+  public void onActivityCreated(Activity activity, Bundle savedInstanceState) {}
 
   /**
    * Handles activity start.
@@ -138,27 +145,37 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
   @Override
   public void onActivityResumed(Activity activity) {
     // Only do work when the 'right' activity is resumed.
-    if (activity == registrar.activity()) {
-      if (nfcAdapter == null) {
-        Log.w(LOGNAME, "onActivityResumed: nfcAdapter is null.");
-      }
-      else {
-        // receive nfc intents in the foreground when available.
-        nfcAdapter.enableForegroundDispatch(
-          registrar.activity(), 
-          nfcPendingIntent, 
-          nfcFilters, 
-          null);
-      }
+    if (activity != registrar.activity()) {
+      return;
+    }
+
+    if (nfcAdapter == null) {
+      Log.w(LOGNAME, "onActivityResumed: nfcAdapter is null.");
+    }
+    else {
+      // receive nfc intents in the foreground when available.
+      nfcAdapter.enableForegroundDispatch(
+        registrar.activity(), 
+        nfcPendingIntent, 
+        nfcFilters, 
+        null);
+
+      // Check the current nfc adapter state.
+      checkStateChange();
       
-      // either this is a new instance, so intenthandled is false, or 
-      // onNewIntent set intenthandled to false. In either case, try to handle
-      // the (nfc) intent.
-      if (!intentHandled) {
-        // TODO: consider adding a call to flutterView.setInitialRoute 
-        // in order to avoid switching pages at the start.
-        handleIntent();
-      }
+      // start the broadcast receiver to listen for nfc state changes (on/off)
+      registrar.context().registerReceiver(
+        nfcStateChangeListener, 
+        nfcStateChangeIntentFilter);
+    }
+    
+    // either this is a new instance, so intent should be handled, or 
+    // onNewIntent set shouldHandleIntent to true. In either case, try to handle
+    // the (nfc?) intent.
+    if (shouldHandleIntent) {
+      // TODO: consider adding a call to flutterView.setInitialRoute 
+      // in order to avoid switching pages at the start.
+      handleIntent();
     }
   }
 
@@ -169,14 +186,18 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
   @Override
   public void onActivityPaused(Activity activity) {
     // Only do work when the 'right' activity is paused.
-    if (activity == registrar.activity()) {
-      if (nfcAdapter == null) {
-        Log.w(LOGNAME, "onActivityPaused: nfcAdapter is null.");
-      }
-      else {
-        // App is no longer on foreground, so disable foreground dispatch.
-        nfcAdapter.disableForegroundDispatch(registrar.activity());
-      }
+    if (activity != registrar.activity()) {
+      return;
+    }
+    if (nfcAdapter == null) {
+      Log.w(LOGNAME, "onActivityPaused: nfcAdapter is null.");
+    }
+    else {
+      // App is no longer on foreground, so disable foreground dispatch.
+      nfcAdapter.disableForegroundDispatch(registrar.activity());
+
+      // Also unregister the broadcastreceiver.
+      registrar.context().unregisterReceiver(nfcStateChangeListener);
     }
   }
 
@@ -193,12 +214,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
    * @param outState The state that will be saved.
    */
   @Override
-  public void onActivitySaveInstanceState(Activity activity, Bundle outState) {
-    // Only do work when the 'right' activity is saving state.
-    if (activity == registrar.activity()) {
-      outState.putBoolean(STATE_INTENT_HANDLED, intentHandled);
-    }
-  }
+  public void onActivitySaveInstanceState(Activity activity, Bundle outState) {}
 
   /**
    * Handles destruction of the activity.
@@ -220,22 +236,28 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     }
 
     String action = intent.getAction();
-    Log.d(LOGNAME, String.format("Intent action = '%s'", action));
-    
-    // TODO: Handle TAG and TECH(?) as well.
-    if (!NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
-      Log.d(
-        LOGNAME, 
-        "onNewIntent: action is not ACTION_NDEF_DISCOVERED returning.");
-      return false;
+
+    switch (action) {
+      case NfcAdapter.ACTION_NDEF_DISCOVERED:
+      case NfcAdapter.ACTION_TAG_DISCOVERED:
+        Log.d(
+          LOGNAME, 
+          String.format("onNewIntent: Got nfc action '%s'", action));
+
+        // onResume will handle the intent.
+        // NOTE: flutter calls setIntent() for us, no need to do that here.
+        this.shouldHandleIntent = true;
+
+        // Let flutter know this plugin handles the intent.
+        return true;
+      default:
+        Log.d(
+          LOGNAME, 
+          String.format(
+            "onNewIntent: action '%s' is not nfc. returning.", 
+            action));
+        return false;
     }
-
-    // onResume will handle the intent.
-    // NOTE: flutter calls setIntent() for us, no need to do that here.
-    this.intentHandled = false;
-
-    // Let flutter know this plugin handles the intent.
-    return true;
   }
 
   /**
@@ -249,16 +271,85 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     switch (call.method) {
       case "configure":
         onConfigure();
-        result.success(null);
+
+        HashMap<String, Boolean> props = new HashMap<String, Boolean>();
+        props.put("nfcAvailable", nfcAvailable);
+        props.put("nfcEnabled", nfcEnabled);
+        result.success(props);
+        break;
+      case "gotoNfcSettings":
+        if (!nfcAvailable) {
+          result.error("1", "NFC settings not available.", null);
+        }
+        else {
+          Intent intent = new Intent(Settings.ACTION_NFC_SETTINGS);
+          registrar.activity().startActivity(intent);
+          result.success(null);
+        }
         break;
       default:
-      Log.w(
-        LOGNAME, 
-        String.format(
-          "onMethodCall: received call to '%s', but is not implemented",
-          call.method));
-        result.notImplemented();
+        Log.w(
+          LOGNAME, 
+          String.format(
+            "onMethodCall: received call to '%s', but is not implemented",
+            call.method));
+          result.notImplemented();
         break;
+    }
+  }
+
+  private void initialize() {
+    // Discover nfc feature.
+    Context context = registrar.context();
+    Activity activity = registrar.activity();
+    PackageManager pm = context.getPackageManager();
+    if (!pm.hasSystemFeature(PackageManager.FEATURE_NFC))
+    {
+      nfcAvailable = false;
+      Log.w(LOGNAME, "nfc feature not found on device.");
+      return;
+    }
+
+    Log.d(LOGNAME, "nfc feature found on device.");
+    nfcAdapter = NfcAdapter.getDefaultAdapter(context);   
+    if (nfcAdapter == null) {
+        nfcAvailable = false;
+        Log.w(LOGNAME, "nfc not supported by device (nfcAdapter is null).");
+        return;
+    }
+    
+    Log.d(LOGNAME, "nfc adapter found.");
+
+    // TODO: Add more intentfilters for different usecases:
+    // (ACTION_TECH_DISCOVERED, TAG_LOST?).
+    nfcFilters = new IntentFilter[] { 
+      new IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED),
+      new IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED)
+    };
+
+    // Need this to enable/disable foreground dispatch.
+    nfcPendingIntent = PendingIntent.getActivity(
+      activity, 
+      0, 
+      new Intent(activity, activity.getClass())
+        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 
+      0);  
+
+    nfcStateChangeListener = new BroadcastReceiver() {
+      @Override
+      public void onReceive(Context context, Intent intent) {
+        checkStateChange();
+      }
+    };
+
+    // Get the current nfc adapter state.
+    nfcEnabled = nfcAdapter.isEnabled();
+  }
+  private void checkStateChange() {
+    boolean nowEnabled = nfcAdapter.isEnabled();
+    if (nowEnabled != nfcEnabled) {
+      nfcEnabled = nowEnabled;
+      notifyNfcState();
     }
   }
 
@@ -277,29 +368,12 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     }
   }
 
-  /**
-   * Sets the required variables for receiving messages from nfc.
-   */
-  private void setNfcSettings() {
-    // TODO: Handle non-existant nfc adapter gracefully.
-    nfcAdapter = NfcAdapter.getDefaultAdapter(registrar.context());   
-    if (nfcAdapter == null) {
-        Log.w(LOGNAME, "nfc not supported by device.");
-        return;
-    }
-    
-    // TODO: Add more intentfilters for different usecases (TAG, TECH).
-    nfcFilters = new IntentFilter[] { 
-      new IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED)
-    };
-    
-    // Need this to enable/disable foreground dispatch.
-    nfcPendingIntent = PendingIntent.getActivity(
-      registrar.activity(), 
-      0, 
-      new Intent(registrar.activity(), registrar.activity().getClass())
-        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 
-      0);
+  private void notifyNfcState() {
+    this.methodChannel.invokeMethod(
+      "setNfcEnabled",
+      nfcEnabled,
+      new MethodChannelResult(LOGNAME, "setNfcEnabled")
+    );
   }
 
   /**
@@ -310,7 +384,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
    */
   private void handleIntent() {
     Log.i(LOGNAME, "handleIntent: begin");
-    intentHandled = true;
+    shouldHandleIntent = false;
     Intent intent = registrar.activity().getIntent();
 
     if (intent == null) {
@@ -377,40 +451,10 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     String payload = payloads[0];
     
     // Call the Dart side.
-    methodChannel.invokeMethod("onMessage", payload, new Result(){
-      /**
-       * Handles success result.
-       * @param o The object returned on success.
-       */
-      @Override
-      public void success(Object o) {
-        Log.d(LOGNAME, "methodchannel returned success.");
-      }
-
-      /**
-       * Handles error result.
-       * @param code The error code.
-       * @param message The error message.
-       * @param details Any error details if available.
-       */
-      @Override
-      public void error(String code, String message, Object details) {
-        Log.e(
-          LOGNAME, 
-          String.format(
-            "methodchannel returned error. code: '%s'. Message: '%s'", 
-            code, 
-            message));
-      }
-      
-      /**
-       * Handles not implemented result.
-       */
-      @Override
-      public void notImplemented() {
-        Log.e(LOGNAME, "methodchannel returned notimplemented.");
-      }
-    });
+    methodChannel.invokeMethod(
+      "onMessage", 
+      payload, 
+      new MethodChannelResult(LOGNAME, "onMessage"));
   }
 
   /**
