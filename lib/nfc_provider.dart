@@ -60,7 +60,5 @@ class _NfcProvider extends InheritedWidget {
     : super(key: key, child: child);
 
   @override
-  bool updateShouldNotify(_NfcProvider oldWidget) => 
-    nfc.nfcEnabled != oldWidget.nfc.nfcEnabled
-      || nfc.nfcAvailable != oldWidget.nfc.nfcAvailable;
+  bool updateShouldNotify(_NfcProvider oldWidget) => true;
 }
