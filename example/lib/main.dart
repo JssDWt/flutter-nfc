@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:nfc/nfc.dart';
+import 'package:nfc/nfc_provider.dart';
 
-void main() => runApp(MyApp());
-
+void main() => runApp(
+  NfcProvider(
+    child: MyApp(),
+  )
+);
 
 class MyApp extends StatefulWidget {
   @override
@@ -13,40 +17,26 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   // Initialize the nfc plugin high in the widget tree.
-  final Nfc _nfc = Nfc();
+  Nfc _nfc;
+  StreamSubscription _messageListener;
   String _currentMessage = "No message yet...";
-  StreamSubscription<bool> _nfcStateChangeSubscription;
-  bool _isConfigured = false;
 
   @override
-  void initState() {
-    super.initState();
-
-    // configure the plugin early. No messages are received before the plugin is
-    // configured.
-    _nfc.configure(
-      onMessage: (String message) async {
-        print("onMessage: $message");
-        _showMessage(message);
-      }
-    ).then((r) {
-      setState(() => _isConfigured = true);
-    } );
-
-    // After calling configure, the current nfc state values can be fetched.
-    // bool nfcEnabled = _nfc.nfcEnabled;
-
-    // Listen to nfc state changes (nfc adapter is turned on/off)
-    _nfcStateChangeSubscription = _nfc.nfcStateChange.listen((nowEnabled) {
-      setState(() {});
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _nfc = NfcProvider.of(context);
+    _messageListener = _nfc.messages.listen(_showMessage);
   }
 
   @override
   void dispose() {
     super.dispose();
-    _nfcStateChangeSubscription.cancel();
+    if (_messageListener != null) {
+      _messageListener.cancel();
+      _messageListener = null;
+    }
   }
+
   void _showMessage(String message) {
     setState(() {
       _currentMessage = message;
@@ -55,13 +45,14 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    print("running build");
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Nfc example app'),
         ),
         body: Center(
-          child: !_isConfigured ? CircularProgressIndicator() : Column(
+          child: !_nfc.isConfigured ? CircularProgressIndicator() : Column(
             children: <Widget>[
               Text("Nfc ${_nfc.nfcAvailable ? "is" : "is NOT"} available on this device."),
               Text("Nfc is turned ${_nfc.nfcEnabled ? "on" : "off"}."),

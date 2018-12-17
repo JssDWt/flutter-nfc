@@ -30,28 +30,39 @@ class Nfc {
   /// Value indicating whether nfc is currently enabled on the device.
   bool nfcEnabled = false;
 
+  /// Value indicating whether nfc has been configured.
+  bool isConfigured = false;
+
   /// Stream transmits a value indicating whether the nfc adapter is enabled.
   /// A new value is streamed when the state changes.
   Stream<bool> get nfcStateChange => _nfcStateController.stream;
 
   // NOTE: No need to close the streamcontroller, because this is a singleton.
   /// Private controller for nfc state change events.
-  StreamController<bool> _nfcStateController = StreamController<bool>.broadcast();
+  StreamController<bool> _nfcStateController 
+    = StreamController<bool>.broadcast();
+
+  /// Stream transmits messages received over nfc.
+  Stream<String> get messages => _nfcMessageController.stream;
+
+  // NOTE: No need to close the streamcontroller, because this is a singleton.
+  /// Private controller for received ndef messages.
+  StreamController<String> _nfcMessageController 
+    = StreamController<String>.broadcast();
  
-  // TODO: Be able to listen to different types of messages in different 
-  // callbacks
-  /// Sets up [MessageHandler] for incoming messages and starts receiving 
-  /// messages from the nfc adapter.
-  Future<void> configure({
-    MessageHandler onMessage
-  }) async {
-    _onMessage = onMessage;
+  /// Sets up the nfc plugin, in order to notify the native part that dart
+  /// is ready to receive messages. After configuration is complete, 
+  /// [isConfigured] will be `true`, the values for [nfcAvailable] and
+  /// [nfcEnabled] will be set and the broadcast streams are initialized.
+  Future<void> configure() async {
     _channel.setMethodCallHandler(_handleMethod);
     Map<String, dynamic> result = await _channel.invokeMethod('configure');
     nfcAvailable = result["nfcAvailable"] as bool;
     nfcEnabled = result["nfcEnabled"] as bool;
+    isConfigured = true;
   }
 
+  /// Navigate to the nfc settings on the phone.
   Future<void> gotoNfcSettings() async {
     await _channel.invokeMethod('gotoNfcSettings');
   }

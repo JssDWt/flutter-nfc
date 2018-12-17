@@ -77,15 +77,12 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
    */
   private boolean shouldHandleIntent = true;
 
-  // TODO: Consider saving this on saveinstancestate.
   /** 
    * Value indicating whether the Dart side of the app is ready to receive
    * messages from this plugin.
    */
   private boolean isConfigured = false;
 
-  // TODO: Consider making this a queue. 
-  // TODO: Consider saving this on saveinstancestate.
   /** buffer for messages received before the Dart side was able to receive. */
   private NdefMessage unhandledMessage;
 

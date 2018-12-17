@@ -28,6 +28,12 @@ class _NfcProviderState extends State<NfcProvider> {
       _nfc = Nfc(); 
     }
 
+    if (!_nfc.isConfigured) {
+      _nfc.configure().then((r) {
+        setState(() {});
+      });
+    }
+
     if (_nfcStateChange == null) {
       _nfcStateChange = _nfc.nfcStateChange.listen((newValue) {
         setState((){});
