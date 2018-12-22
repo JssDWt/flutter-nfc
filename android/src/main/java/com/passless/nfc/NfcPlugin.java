@@ -385,13 +385,13 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     Intent intent = registrar.activity().getIntent();
 
     if (intent == null) {
-      Log.d(LOGNAME, "handleIntent: intent is null, returning.");
+      Log.w(LOGNAME, "handleIntent: intent is null, returning.");
       return;
     }
     
     // TODO: Handle other action types, such as TAG and TECH as well.
     if (!NfcAdapter.ACTION_NDEF_DISCOVERED.equals(intent.getAction())) {
-      Log.d(
+      Log.w(
         LOGNAME, 
         "intent action does not equal ACTION_NDEF_DISCOVERED, returning.");
       return;
@@ -417,10 +417,11 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
 
     // If Dart is not yet ready to receive the message, buffer it.
     if (this.isConfigured) {
+      Log.w(LOGNAME, "handleIntent: isConfigured==true, handling message.");
       handleMessage(message);
     }
     else {
-      Log.d(LOGNAME, "handleIntent: isConfigured==false, buffering message.");
+      Log.w(LOGNAME, "handleIntent: isConfigured==false, buffering message.");
       this.unhandledMessage = message;
     }
   }

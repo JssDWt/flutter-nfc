@@ -76,7 +76,8 @@ class Nfc {
         _nfcStateController.sink.add(nfcEnabled);
         return "nothing";
       case "onMessage":
-        return _onMessage(call.arguments as String);
+        _nfcMessageController.add(call.arguments as String);
+        return "nothing";
 
       default:
         print("method '${call.method}' is not implemented by _handleMethod.");
