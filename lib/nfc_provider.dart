@@ -24,14 +24,9 @@ class _NfcProviderState extends State<NfcProvider> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    //WidgetsFlutterBinding.ensureInitialized();
     if (_nfc == null) {
       _nfc = Nfc(); 
-    }
-
-    if (!_nfc.isConfigured) {
-      _nfc.configure().then((r) {
-        setState(() {});
-      });
     }
 
     if (_nfcStateChange == null) {

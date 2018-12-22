@@ -42,26 +42,21 @@ class Nfc {
   StreamController<bool> _nfcStateController 
     = StreamController<bool>.broadcast();
 
-  /// Stream transmits messages received over nfc.
-  Stream<String> get messages => _nfcMessageController.stream;
-
-  // NOTE: No need to close the streamcontroller, because this is a singleton.
-  /// Private controller for received ndef messages.
-  StreamController<String> _nfcMessageController 
-    = StreamController<String>.broadcast();
- 
   /// Sets up the nfc plugin, in order to notify the native part that dart
   /// is ready to receive messages. After configuration is complete, 
   /// [isConfigured] will be `true`, the values for [nfcAvailable] and
   /// [nfcEnabled] will be set and the broadcast streams are initialized.
-  Future<void> configure() async {
+  Future<void> configure(
+    {onMessage: MessageHandler}
+  ) async {
     _channel.setMethodCallHandler(_handleMethod);
+    _onMessage = onMessage;
     Map<String, dynamic> result = await _channel.invokeMethod('configure');
     nfcAvailable = result["nfcAvailable"] as bool;
     nfcEnabled = result["nfcEnabled"] as bool;
     isConfigured = true;
   }
-
+  
   /// Navigate to the nfc settings on the phone.
   Future<void> gotoNfcSettings() async {
     await _channel.invokeMethod('gotoNfcSettings');
@@ -76,9 +71,11 @@ class Nfc {
         _nfcStateController.sink.add(nfcEnabled);
         return "nothing";
       case "onMessage":
-        _nfcMessageController.add(call.arguments as String);
-        return "nothing";
-
+        print('Nfc: onMessage called on dart side.');
+        if (_onMessage != null) {
+          _onMessage(call.arguments as String);
+        }
+        return "nothing"; 
       default:
         print("method '${call.method}' is not implemented by _handleMethod.");
     }

@@ -151,6 +151,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     }
     else {
       // receive nfc intents in the foreground when available.
+      Log.w(LOGNAME, "onActivityResumed: enabling foreground dispatch.");
       nfcAdapter.enableForegroundDispatch(
         registrar.activity(), 
         nfcPendingIntent, 
@@ -169,6 +170,10 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     // either this is a new instance, so intent should be handled, or 
     // onNewIntent set shouldHandleIntent to true. In either case, try to handle
     // the (nfc?) intent.
+    Log.w(
+      LOGNAME, 
+      String.format("onActivityResumed: intent action: %s, should handle: %b", registrar.activity().getIntent().getAction(), shouldHandleIntent)
+    );
     if (shouldHandleIntent) {
       // TODO: consider adding a call to flutterView.setInitialRoute 
       // in order to avoid switching pages at the start.
@@ -237,7 +242,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     switch (action) {
       case NfcAdapter.ACTION_NDEF_DISCOVERED:
       case NfcAdapter.ACTION_TAG_DISCOVERED:
-        Log.d(
+        Log.w(
           LOGNAME, 
           String.format("onNewIntent: Got nfc action '%s'", action));
 
@@ -248,7 +253,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
         // Let flutter know this plugin handles the intent.
         return true;
       default:
-        Log.d(
+        Log.w(
           LOGNAME, 
           String.format(
             "onNewIntent: action '%s' is not nfc. returning.", 
@@ -318,10 +323,10 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
     Log.d(LOGNAME, "nfc adapter found.");
 
     // TODO: Add more intentfilters for different usecases:
-    // (ACTION_TECH_DISCOVERED, TAG_LOST?).
+    // (TAG, ACTION_TECH_DISCOVERED, TAG_LOST?).
     nfcFilters = new IntentFilter[] { 
       new IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED),
-      new IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED)
+      // new IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED)
     };
 
     // Need this to enable/disable foreground dispatch.
@@ -388,7 +393,7 @@ public class NfcPlugin implements MethodCallHandler, NewIntentListener,
       Log.w(LOGNAME, "handleIntent: intent is null, returning.");
       return;
     }
-    
+    Log.w(LOGNAME, String.format("HandleIntent: action = %s", intent.getAction()));
     // TODO: Handle other action types, such as TAG and TECH as well.
     if (!NfcAdapter.ACTION_NDEF_DISCOVERED.equals(intent.getAction())) {
       Log.w(
