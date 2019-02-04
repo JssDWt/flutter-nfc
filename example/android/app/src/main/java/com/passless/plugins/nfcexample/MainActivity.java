@@ -1,4 +1,4 @@
-package com.passless.nfcexample;
+package com.passless.plugins.nfcexample;
 
 import android.os.Bundle;
 import io.flutter.app.FlutterActivity;

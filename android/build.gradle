@@ -1,4 +1,4 @@
-group 'com.passless.nfc'
+group 'com.passless.plugins.nfc'
 version '1.0-SNAPSHOT'
 
 buildscript {

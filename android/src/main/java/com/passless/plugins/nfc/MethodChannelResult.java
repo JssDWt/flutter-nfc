@@ -1,4 +1,4 @@
-package com.passless.nfc;
+package com.passless.plugins.nfc;
 
 import android.util.Log;
 import io.flutter.plugin.common.MethodChannel.Result;

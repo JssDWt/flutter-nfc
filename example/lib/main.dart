@@ -22,7 +22,12 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    Nfc().configure(onMessage: _showMessage);
+    _configureNfc();
+  }
+
+  Future<void> _configureNfc() async {
+    await Nfc().configure(onMessage: _showMessage);
+    setState(() {});
   }
 
   Future<void> _showMessage(String message) async {

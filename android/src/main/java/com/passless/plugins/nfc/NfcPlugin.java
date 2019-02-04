@@ -1,4 +1,4 @@
-package com.passless.nfc;
+package com.passless.plugins.nfc;
 
 import android.app.Activity;
 import android.app.Application;
